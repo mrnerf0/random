@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -11,12 +11,13 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { RefreshCw, Filter } from "lucide-react";
+import { Filter } from "lucide-react";
 import { Select } from "@/components/ui/select";
 import { KanbanColumnComponent } from "@/components/kanban/kanban-column";
 import { KanbanCard } from "@/components/kanban/kanban-card";
 import { EditCardDialog } from "@/components/kanban/edit-card-dialog";
-import type { KanbanItem, KanbanColumn, TeamMember } from "@/types";
+import type { KanbanItem, KanbanColumn } from "@/types";
+import { demoKanbanItems, demoTeamMembers } from "@/lib/demo-data";
 
 const COLUMNS: KanbanColumn[] = [
   "ideas",
@@ -28,9 +29,8 @@ const COLUMNS: KanbanColumn[] = [
 ];
 
 export default function KanbanPage() {
-  const [items, setItems] = useState<KanbanItem[]>([]);
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<KanbanItem[]>(demoKanbanItems);
+  const [teamMembers] = useState(demoTeamMembers);
   const [activeItem, setActiveItem] = useState<KanbanItem | null>(null);
   const [editItem, setEditItem] = useState<KanbanItem | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -42,36 +42,12 @@ export default function KanbanPage() {
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [itemsRes, teamRes] = await Promise.all([
-        fetch("/api/kanban"),
-        fetch("/api/team"),
-      ]);
-      const [itemsJson, teamJson] = await Promise.all([
-        itemsRes.json(),
-        teamRes.json(),
-      ]);
-      setItems(itemsJson.data || []);
-      setTeamMembers(teamJson.data || []);
-    } catch (err) {
-      console.error("Failed to fetch kanban data:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
   function handleDragStart(event: DragStartEvent) {
     const item = items.find((i) => i.id === event.active.id);
     setActiveItem(item || null);
   }
 
-  async function handleDragEnd(event: DragEndEvent) {
+  function handleDragEnd(event: DragEndEvent) {
     setActiveItem(null);
     const { active, over } = event;
 
@@ -80,14 +56,11 @@ export default function KanbanPage() {
     const activeId = active.id as string;
     const overId = over.id as string;
 
-    // Determine the target column
     let targetColumn: KanbanColumn;
 
     if (COLUMNS.includes(overId as KanbanColumn)) {
-      // Dropped directly on a column
       targetColumn = overId as KanbanColumn;
     } else {
-      // Dropped on another card - find that card's column
       const overItem = items.find((i) => i.id === overId);
       if (!overItem) return;
       targetColumn = overItem.column;
@@ -96,24 +69,11 @@ export default function KanbanPage() {
     const activeItemData = items.find((i) => i.id === activeId);
     if (!activeItemData || activeItemData.column === targetColumn) return;
 
-    // Optimistic update
     setItems((prev) =>
       prev.map((i) =>
         i.id === activeId ? { ...i, column: targetColumn } : i
       )
     );
-
-    // Persist to server
-    try {
-      await fetch(`/api/kanban/${activeId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ column: targetColumn }),
-      });
-    } catch (err) {
-      console.error("Failed to update item:", err);
-      fetchData(); // Revert on error
-    }
   }
 
   function handleAddItem(column: KanbanColumn) {
@@ -127,53 +87,37 @@ export default function KanbanPage() {
     setDialogOpen(true);
   }
 
-  async function handleSave(data: Partial<KanbanItem> & { id?: string }) {
-    try {
-      if (data.id) {
-        // Update existing
-        const { id, ...updates } = data;
-        await fetch(`/api/kanban/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updates),
-        });
-      } else {
-        // Create new
-        await fetch("/api/kanban", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        });
-      }
-      fetchData();
-    } catch (err) {
-      console.error("Failed to save item:", err);
+  function handleSave(data: Partial<KanbanItem> & { id?: string }) {
+    if (data.id) {
+      setItems((prev) =>
+        prev.map((i) => (i.id === data.id ? { ...i, ...data } : i))
+      );
+    } else {
+      const newItem: KanbanItem = {
+        id: `k-${Date.now()}`,
+        title: data.title || "Untitled",
+        description: data.description || "",
+        column: (data.column as KanbanColumn) || "ideas",
+        assigned_to: data.assigned_to || null,
+        due_date: data.due_date || null,
+        format: data.format || "commentary",
+        notes: data.notes || "",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      setItems((prev) => [...prev, newItem]);
     }
   }
 
-  async function handleDelete(id: string) {
-    try {
-      await fetch(`/api/kanban/${id}`, { method: "DELETE" });
-      setItems((prev) => prev.filter((i) => i.id !== id));
-    } catch (err) {
-      console.error("Failed to delete item:", err);
-    }
+  function handleDelete(id: string) {
+    setItems((prev) => prev.filter((i) => i.id !== id));
   }
 
-  // Filter items
   const filteredItems = items.filter((item) => {
     if (filterAssignee && item.assigned_to !== filterAssignee) return false;
     if (filterFormat && item.format !== filterFormat) return false;
     return true;
   });
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
 
   const memberFilterOptions = [
     { value: "", label: "All Members" },
