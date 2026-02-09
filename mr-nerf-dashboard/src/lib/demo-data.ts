@@ -7,16 +7,16 @@ function daysAgo(n: number): string {
   return d.toISOString().split("T")[0];
 }
 
-// Simulate subscriber growth from ~42K to ~48.5K over 180 days
+// Simulate subscriber growth from ~800 to ~1.2K over 180 days (@Mr.nerf0)
 function generateYouTubeAnalytics(): Analytics[] {
   const data: Analytics[] = [];
   for (let i = 180; i >= 0; i -= 3) {
     const progress = (180 - i) / 180;
-    const base = 42000 + Math.floor(progress * 6500);
-    const noise = Math.floor(Math.random() * 200 - 100);
-    const views = 850000 + Math.floor(progress * 400000) + Math.floor(Math.random() * 50000);
-    const avgViews = 45000 + Math.floor(progress * 25000) + Math.floor(Math.random() * 5000);
-    const engagement = 4.2 + progress * 1.8 + Math.random() * 0.5;
+    const base = 800 + Math.floor(progress * 400);
+    const noise = Math.floor(Math.random() * 20 - 10);
+    const views = 8000 + Math.floor(progress * 12000) + Math.floor(Math.random() * 2000);
+    const avgViews = 1200 + Math.floor(progress * 800) + Math.floor(Math.random() * 300);
+    const engagement = 5.0 + progress * 2.5 + Math.random() * 0.8;
     data.push({
       id: `yt-${i}`,
       date: daysAgo(i),
@@ -31,20 +31,21 @@ function generateYouTubeAnalytics(): Analytics[] {
   return data;
 }
 
+// Simulate follower growth from ~3.2K to ~4.5K over 180 days (@mr.nerf)
 function generateInstagramAnalytics(): Analytics[] {
   const data: Analytics[] = [];
   for (let i = 180; i >= 0; i -= 3) {
     const progress = (180 - i) / 180;
-    const base = 12000 + Math.floor(progress * 5200);
-    const noise = Math.floor(Math.random() * 100 - 50);
+    const base = 3200 + Math.floor(progress * 1280);
+    const noise = Math.floor(Math.random() * 30 - 15);
     data.push({
       id: `ig-${i}`,
       date: daysAgo(i),
       platform: "instagram",
       follower_count: base + noise,
-      monthly_views: 120000 + Math.floor(progress * 80000),
-      engagement_rate: parseFloat((3.5 + progress * 1.2 + Math.random() * 0.3).toFixed(1)),
-      avg_views_last_5: 8000 + Math.floor(progress * 6000),
+      monthly_views: 15000 + Math.floor(progress * 10000),
+      engagement_rate: parseFloat((4.5 + progress * 1.5 + Math.random() * 0.4).toFixed(1)),
+      avg_views_last_5: 2000 + Math.floor(progress * 1500),
       created_at: daysAgo(i),
     });
   }
@@ -275,20 +276,20 @@ export const demoKanbanItems: KanbanItem[] = [
 
 export const demoLiveStats: LiveStats = {
   youtube: {
-    subscribers: 48500,
-    totalViews: 12500000,
-    videoCount: 342,
+    subscribers: 1200,
+    totalViews: 85000,
+    videoCount: 45,
     recentVideos: [
-      { title: "NERF Pro 2.0 - Is It Worth The Hype?", views: 89000, likes: 4200, publishedAt: daysAgo(2) },
-      { title: "I Tested Every $10 Blaster So You Don't Have To", views: 156000, likes: 8900, publishedAt: daysAgo(5) },
-      { title: "This 3D Printed Mod Changes EVERYTHING", views: 234000, likes: 12000, publishedAt: daysAgo(9) },
-      { title: "Nerf War: 50 vs 50 Battle Royale", views: 567000, likes: 28000, publishedAt: daysAgo(14) },
-      { title: "Unboxing $500 of Mystery Nerf Blasters", views: 412000, likes: 19500, publishedAt: daysAgo(19) },
+      { title: "NERF Pro 2.0 - Is It Worth The Hype?", views: 2400, likes: 120, publishedAt: daysAgo(2) },
+      { title: "I Tested Every $10 Blaster So You Don't Have To", views: 4800, likes: 310, publishedAt: daysAgo(5) },
+      { title: "This 3D Printed Mod Changes EVERYTHING", views: 6200, likes: 450, publishedAt: daysAgo(9) },
+      { title: "Nerf War: 50 vs 50 Battle Royale", views: 8900, likes: 620, publishedAt: daysAgo(14) },
+      { title: "Unboxing Mystery Nerf Blasters", views: 5100, likes: 380, publishedAt: daysAgo(19) },
     ],
   },
   instagram: {
-    followers: 17200,
-    engagementRate: 4.8,
+    followers: 4480,
+    engagementRate: 5.2,
   },
 };
 
