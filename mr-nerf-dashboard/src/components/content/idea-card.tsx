@@ -3,7 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Flame, Plus, FileText } from "lucide-react";
+import { Flame, Plus, FileText, Film, Clapperboard } from "lucide-react";
 import type { GeneratedIdea } from "@/types";
 
 interface IdeaCardProps {
@@ -28,6 +28,16 @@ export function IdeaCard({
               {idea.virality_score}/10
             </span>
           </div>
+        </div>
+
+        <div className="flex items-center gap-2 mb-2">
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+            {idea.format === "short-form" ? (
+              <><Clapperboard className="h-3 w-3 mr-1" /> Short-Form</>
+            ) : (
+              <><Film className="h-3 w-3 mr-1" /> Long-Form</>
+            )}
+          </Badge>
         </div>
 
         <p className="text-xs text-muted-foreground mb-3">{idea.hook}</p>

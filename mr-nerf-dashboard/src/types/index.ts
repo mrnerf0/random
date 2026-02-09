@@ -1,9 +1,9 @@
 // Database types for the Mr. Nerf content dashboard
 
 export type Platform = "youtube" | "instagram";
-export type TrendSource = "reddit" | "twitter" | "news";
+export type TrendSource = "reddit" | "twitter" | "news" | "youtube" | "instagram";
 export type TrendCategory = "news" | "trending" | "viral";
-export type ContentFormat = "review" | "news" | "commentary" | "tutorial";
+export type ContentFormat = "review" | "news" | "commentary" | "tutorial" | "short-form" | "long-form";
 export type IdeaStatus = "idea" | "approved" | "rejected";
 export type KanbanColumn =
   | "ideas"
@@ -22,6 +22,19 @@ export interface Analytics {
   engagement_rate: number;
   avg_views_last_5: number;
   created_at: string;
+}
+
+export interface LiveStats {
+  youtube: {
+    subscribers: number;
+    totalViews: number;
+    videoCount: number;
+    recentVideos: { title: string; views: number; likes: number; publishedAt: string }[];
+  };
+  instagram: {
+    followers: number;
+    engagementRate: number;
+  };
 }
 
 export interface ContentTrend {
@@ -74,10 +87,40 @@ export interface GeneratedIdea {
   hook: string;
   outline: string[];
   virality_score: number;
+  format: "short-form" | "long-form";
 }
 
 export interface ScriptOutline {
   intro: string;
   sections: { title: string; talking_points: string[]; b_roll: string }[];
   outro: string;
+  estimated_duration: string;
+}
+
+export interface HeadshotAd {
+  id: string;
+  page_name: string;
+  ad_text: string;
+  media_url: string | null;
+  started_running: string;
+  platform: string;
+  impressions_range: string;
+}
+
+export interface HeadshotAdIdea {
+  hook: string;
+  script: string;
+  visual_direction: string;
+  target_audience: string;
+  cta: string;
+  format: "ugc-testimonial" | "problem-solution" | "before-after" | "unboxing" | "lifestyle";
+}
+
+export interface WritingInstructions {
+  tone: string;
+  style_notes: string;
+  catchphrases: string[];
+  intro_style: string;
+  outro_style: string;
+  example_scripts: string;
 }

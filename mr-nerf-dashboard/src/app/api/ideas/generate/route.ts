@@ -1,33 +1,20 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { generateVideoIdeas } from "@/lib/claude";
-import { createServerSupabase } from "@/lib/supabase";
+import { getTrends } from "@/lib/get-trends";
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerSupabase();
+    const body = await request.json().catch(() => ({}));
+    const format = body.format || "both"; // "short-form", "long-form", or "both"
+    const customInstructions = body.customInstructions || "";
 
-    // Fetch the latest trends to use as context
-    const { data: trends, error: trendsError } = await supabase
-      .from("content_trends")
-      .select("*")
-      .order("scraped_at", { ascending: false })
-      .limit(10);
+    // Fetch real trends instead of using hardcoded demo data
+    const trends = await getTrends();
 
-    if (trendsError) {
-      return NextResponse.json({ error: trendsError.message }, { status: 500 });
-    }
-
-    if (!trends || trends.length === 0) {
-      return NextResponse.json(
-        { error: "No trends found. Run the scrapers first." },
-        { status: 400 }
-      );
-    }
-
-    const ideas = await generateVideoIdeas(trends);
-    return NextResponse.json({ ideas, trends_used: trends.length });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
+    const ideas = await generateVideoIdeas(trends, format, customInstructions);
+    return NextResponse.json({ ideas });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to generate ideas";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -1,22 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { usePathname } from "next/navigation";
 import {
   BarChart3,
   Newspaper,
   KanbanSquare,
-  LogOut,
   Gamepad2,
+  PenTool,
+  Crosshair,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { href: "/content-feed", label: "Content Feed", icon: Newspaper },
+  { href: "/scripts", label: "Script Writer", icon: PenTool },
   { href: "/kanban", label: "Kanban Board", icon: KanbanSquare },
+  { href: "/headshot", label: "Headshot", icon: Crosshair },
 ];
 
 interface SidebarProps {
@@ -25,12 +26,6 @@ interface SidebarProps {
 
 export function Sidebar({ userName }: SidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
-
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    router.push("/login");
-  }
 
   return (
     <div className="flex flex-col h-screen w-64 border-r bg-card">
@@ -72,17 +67,8 @@ export function Sidebar({ userName }: SidebarProps) {
       {/* User section */}
       <div className="p-4 border-t">
         {userName && (
-          <p className="text-sm font-medium mb-2 px-3">{userName}</p>
+          <p className="text-sm font-medium px-3">{userName}</p>
         )}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start gap-2 text-muted-foreground"
-          onClick={handleLogout}
-        >
-          <LogOut className="h-4 w-4" />
-          Sign Out
-        </Button>
       </div>
     </div>
   );

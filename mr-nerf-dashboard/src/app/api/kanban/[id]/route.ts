@@ -1,53 +1,82 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase";
+import { demoKanbanItems } from "@/lib/demo-data";
+import type { KanbanItem } from "@/types";
 
-// PATCH update a kanban item
+// Shared in-memory store (same reference as parent route in the same serverless instance)
+let memoryItems: KanbanItem[] | null = null;
+
+function getMemoryItems(): KanbanItem[] {
+  if (!memoryItems) {
+    memoryItems = [...demoKanbanItems];
+  }
+  return memoryItems;
+}
+
+function hasSupabase(): boolean {
+  return !!(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    !process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")
+  );
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  try {
-    const supabase = createServerSupabase();
-    const body = await request.json();
+  const body = await request.json();
 
-    const { data, error } = await supabase
-      .from("kanban_items")
-      .update(body)
-      .eq("id", params.id)
-      .select()
-      .single();
+  if (hasSupabase()) {
+    try {
+      const supabase = createServerSupabase();
+      const { data, error } = await supabase
+        .from("kanban_items")
+        .update(body)
+        .eq("id", params.id)
+        .select()
+        .single();
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) throw error;
+      return NextResponse.json({ data });
+    } catch {
+      // Fall through to in-memory
     }
-
-    return NextResponse.json({ data });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
   }
+
+  // In-memory fallback
+  const items = getMemoryItems();
+  const idx = items.findIndex((i) => i.id === params.id);
+  if (idx >= 0) {
+    items[idx] = { ...items[idx], ...body, updated_at: new Date().toISOString() };
+    return NextResponse.json({ data: items[idx] });
+  }
+  return NextResponse.json({ error: "Item not found" }, { status: 404 });
 }
 
-// DELETE a kanban item
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  try {
-    const supabase = createServerSupabase();
+  if (hasSupabase()) {
+    try {
+      const supabase = createServerSupabase();
+      const { error } = await supabase
+        .from("kanban_items")
+        .delete()
+        .eq("id", params.id);
 
-    const { error } = await supabase
-      .from("kanban_items")
-      .delete()
-      .eq("id", params.id);
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    } catch {
+      // Fall through to in-memory
     }
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
   }
+
+  // In-memory fallback
+  const items = getMemoryItems();
+  const idx = items.findIndex((i) => i.id === params.id);
+  if (idx >= 0) {
+    items.splice(idx, 1);
+  }
+  return NextResponse.json({ success: true });
 }

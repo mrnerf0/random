@@ -1,54 +1,78 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase";
+import { demoKanbanItems } from "@/lib/demo-data";
+import type { KanbanItem } from "@/types";
 
-// GET all kanban items
-export async function GET() {
-  try {
-    const supabase = createServerSupabase();
+// In-memory store for kanban items when Supabase is not configured
+let memoryItems: KanbanItem[] | null = null;
 
-    const { data, error } = await supabase
-      .from("kanban_items")
-      .select("*, team_members(name, avatar_url)")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ data });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+function getMemoryItems(): KanbanItem[] {
+  if (!memoryItems) {
+    memoryItems = [...demoKanbanItems];
   }
+  return memoryItems;
 }
 
-// POST create a new kanban item
-export async function POST(request: NextRequest) {
-  try {
-    const supabase = createServerSupabase();
-    const body = await request.json();
+function hasSupabase(): boolean {
+  return !!(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    !process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")
+  );
+}
 
-    const { data, error } = await supabase
-      .from("kanban_items")
-      .insert({
-        title: body.title,
-        description: body.description || "",
-        column: body.column || "ideas",
-        assigned_to: body.assigned_to || null,
-        due_date: body.due_date || null,
-        format: body.format || "",
-        notes: body.notes || "",
-      })
-      .select()
-      .single();
+export async function GET() {
+  if (hasSupabase()) {
+    try {
+      const supabase = createServerSupabase();
+      const { data, error } = await supabase
+        .from("kanban_items")
+        .select("*")
+        .order("created_at", { ascending: true });
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) throw error;
+      if (data && data.length > 0) {
+        return NextResponse.json({ data });
+      }
+    } catch {
+      // Fall through
     }
-
-    return NextResponse.json({ data }, { status: 201 });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
   }
+
+  return NextResponse.json({ data: getMemoryItems() });
+}
+
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+
+  if (hasSupabase()) {
+    try {
+      const supabase = createServerSupabase();
+      const { data, error } = await supabase
+        .from("kanban_items")
+        .insert(body)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return NextResponse.json({ data });
+    } catch {
+      // Fall through to in-memory
+    }
+  }
+
+  // In-memory fallback
+  const newItem: KanbanItem = {
+    id: `k-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    title: body.title || "Untitled",
+    description: body.description || "",
+    column: body.column || "ideas",
+    assigned_to: body.assigned_to || null,
+    due_date: body.due_date || null,
+    format: body.format || "commentary",
+    notes: body.notes || "",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  getMemoryItems().push(newItem);
+  return NextResponse.json({ data: newItem });
 }

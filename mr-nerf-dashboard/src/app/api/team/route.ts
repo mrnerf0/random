@@ -1,22 +1,19 @@
 import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase";
+import { demoTeamMembers } from "@/lib/demo-data";
 
 export async function GET() {
   try {
     const supabase = createServerSupabase();
+    const { data, error } = await supabase.from("team_members").select("*");
 
-    const { data, error } = await supabase
-      .from("team_members")
-      .select("*")
-      .order("name");
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) throw error;
+    if (data && data.length > 0) {
+      return NextResponse.json({ data });
     }
-
-    return NextResponse.json({ data });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch {
+    // Fall through to demo data
   }
+
+  return NextResponse.json({ data: demoTeamMembers });
 }

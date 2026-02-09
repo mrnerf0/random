@@ -1,12 +1,13 @@
 /**
- * Twitter/X scraper for gaming news accounts
+ * Twitter/X scraper for gaming news accounts.
  * Uses Twitter API v2 with Bearer token authentication.
  */
 
 import { createServerSupabase } from "../supabase";
+import type { ContentTrend } from "@/types";
 
-// Gaming news accounts to monitor
-const GAMING_ACCOUNTS = ["Dexerto", "VGC_News", "charlieINTEL"];
+// Gaming and Nerf-related accounts to monitor
+const GAMING_ACCOUNTS = ["Dexerto", "VGC_News", "charlieINTEL", "NerfNation"];
 
 interface Tweet {
   id: string;
@@ -27,7 +28,6 @@ async function fetchUserTweets(username: string): Promise<Tweet[]> {
     throw new Error("Missing TWITTER_BEARER_TOKEN");
   }
 
-  // First get the user ID
   const userRes = await fetch(
     `https://api.twitter.com/2/users/by/username/${username}`,
     {
@@ -45,7 +45,6 @@ async function fetchUserTweets(username: string): Promise<Tweet[]> {
 
   if (!userId) return [];
 
-  // Fetch recent tweets (last 24 hours)
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const tweetsRes = await fetch(
     `https://api.twitter.com/2/users/${userId}/tweets?max_results=10&start_time=${since}&tweet.fields=public_metrics`,
@@ -55,9 +54,7 @@ async function fetchUserTweets(username: string): Promise<Tweet[]> {
   );
 
   if (!tweetsRes.ok) {
-    console.warn(
-      `[Twitter] Could not fetch tweets for ${username}: ${tweetsRes.status}`
-    );
+    console.warn(`[Twitter] Could not fetch tweets for ${username}: ${tweetsRes.status}`);
     return [];
   }
 
@@ -87,8 +84,8 @@ async function fetchUserTweets(username: string): Promise<Tweet[]> {
   );
 }
 
-/** Run the Twitter scrape and store results */
-export async function scrapeTwitter(): Promise<void> {
+/** Run the Twitter scrape - returns trends and optionally stores in Supabase */
+export async function scrapeTwitter(): Promise<ContentTrend[]> {
   console.log("[Twitter] Starting scrape...");
 
   const allTweets: Tweet[] = [];
@@ -96,37 +93,41 @@ export async function scrapeTwitter(): Promise<void> {
   for (const account of GAMING_ACCOUNTS) {
     const tweets = await fetchUserTweets(account);
     allTweets.push(...tweets);
-    // Small delay to respect rate limits
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 
   if (allTweets.length === 0) {
     console.log("[Twitter] No tweets found in the last 24 hours.");
-    return;
+    return [];
   }
 
-  const supabase = createServerSupabase();
-
-  const records = allTweets.map((tweet) => {
-    const totalEngagement =
-      tweet.metrics.retweets + tweet.metrics.likes + tweet.metrics.replies;
+  const records: ContentTrend[] = allTweets.map((tweet) => {
+    const totalEngagement = tweet.metrics.retweets + tweet.metrics.likes + tweet.metrics.replies;
     return {
+      id: `twitter-${tweet.id}`,
+      scraped_at: new Date().toISOString(),
       source: "twitter" as const,
       title: tweet.text.substring(0, 200),
       url: `https://twitter.com/${tweet.authorUsername}/status/${tweet.id}`,
       summary: `@${tweet.authorUsername}: ${tweet.metrics.likes} likes, ${tweet.metrics.retweets} RTs`,
       category: totalEngagement > 1000 ? ("viral" as const) : ("trending" as const),
       engagement_score: totalEngagement,
+      relevance_score: null,
     };
   });
 
-  const { error } = await supabase.from("content_trends").insert(records);
-
-  if (error) {
-    throw new Error(`Supabase insert error: ${error.message}`);
+  // Try to persist to Supabase
+  try {
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")) {
+      const supabase = createServerSupabase();
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const dbRecords = records.map(({ id, relevance_score, ...rest }) => rest);
+      await supabase.from("content_trends").insert(dbRecords);
+    }
+  } catch (e) {
+    console.warn("[Twitter] Could not persist to Supabase:", e);
   }
 
-  console.log(
-    `[Twitter] Scraped ${records.length} tweets from ${GAMING_ACCOUNTS.length} accounts`
-  );
+  console.log(`[Twitter] Scraped ${records.length} tweets from ${GAMING_ACCOUNTS.length} accounts`);
+  return records;
 }
