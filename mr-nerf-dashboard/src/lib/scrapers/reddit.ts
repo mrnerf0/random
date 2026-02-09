@@ -1,9 +1,13 @@
 /**
- * Reddit scraper for r/gaming
- * Fetches top posts from the last 24 hours using Reddit's OAuth API.
+ * Reddit scraper for Nerf and gaming communities.
+ * Fetches top posts from multiple subreddits using Reddit's OAuth API.
  */
 
 import { createServerSupabase } from "../supabase";
+import type { ContentTrend } from "@/types";
+
+// Nerf and gaming subreddits to monitor
+const SUBREDDITS = ["Nerf", "nerfmods", "NerfExchange", "gaming"];
 
 interface RedditPost {
   title: string;
@@ -12,6 +16,7 @@ interface RedditPost {
   numComments: number;
   flair: string;
   permalink: string;
+  subreddit: string;
 }
 
 /** Authenticate with Reddit using client credentials (script app) */
@@ -43,12 +48,14 @@ async function getRedditAccessToken(): Promise<string> {
   return data.access_token;
 }
 
-/** Fetch top posts from r/gaming */
-async function fetchTopPosts(limit = 20): Promise<RedditPost[]> {
-  const token = await getRedditAccessToken();
-
+/** Fetch top posts from a subreddit */
+async function fetchTopPosts(
+  subreddit: string,
+  token: string,
+  limit = 10
+): Promise<RedditPost[]> {
   const res = await fetch(
-    `https://oauth.reddit.com/r/gaming/top?t=day&limit=${limit}`,
+    `https://oauth.reddit.com/r/${subreddit}/top?t=day&limit=${limit}`,
     {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -58,7 +65,8 @@ async function fetchTopPosts(limit = 20): Promise<RedditPost[]> {
   );
 
   if (!res.ok) {
-    throw new Error(`Reddit API error: ${res.status}`);
+    console.warn(`[Reddit] Could not fetch r/${subreddit}: ${res.status}`);
+    return [];
   }
 
   const data = await res.json();
@@ -72,6 +80,7 @@ async function fetchTopPosts(limit = 20): Promise<RedditPost[]> {
         num_comments: number;
         link_flair_text: string;
         permalink: string;
+        subreddit: string;
       };
     }) => ({
       title: child.data.title,
@@ -80,6 +89,7 @@ async function fetchTopPosts(limit = 20): Promise<RedditPost[]> {
       numComments: child.data.num_comments,
       flair: child.data.link_flair_text || "General",
       permalink: `https://reddit.com${child.data.permalink}`,
+      subreddit: child.data.subreddit,
     })
   );
 }
@@ -91,27 +101,43 @@ function categorize(score: number): "viral" | "trending" | "news" {
   return "news";
 }
 
-/** Run the Reddit scrape and store results */
-export async function scrapeReddit(): Promise<void> {
+/** Run the Reddit scrape - returns trends and optionally stores in Supabase */
+export async function scrapeReddit(): Promise<ContentTrend[]> {
   console.log("[Reddit] Starting scrape...");
 
-  const posts = await fetchTopPosts(20);
-  const supabase = createServerSupabase();
+  const token = await getRedditAccessToken();
+  const allPosts: RedditPost[] = [];
 
-  const records = posts.map((post) => ({
+  for (const subreddit of SUBREDDITS) {
+    const posts = await fetchTopPosts(subreddit, token);
+    allPosts.push(...posts);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+
+  const records: ContentTrend[] = allPosts.map((post) => ({
+    id: `reddit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    scraped_at: new Date().toISOString(),
     source: "reddit" as const,
     title: post.title,
     url: post.permalink,
-    summary: `${post.score} upvotes, ${post.numComments} comments. Flair: ${post.flair}`,
+    summary: `r/${post.subreddit} · ${post.score} upvotes, ${post.numComments} comments. Flair: ${post.flair}`,
     category: categorize(post.score),
     engagement_score: post.score,
+    relevance_score: null,
   }));
 
-  const { error } = await supabase.from("content_trends").insert(records);
-
-  if (error) {
-    throw new Error(`Supabase insert error: ${error.message}`);
+  // Try to persist to Supabase
+  try {
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")) {
+      const supabase = createServerSupabase();
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const dbRecords = records.map(({ id, relevance_score, ...rest }) => rest);
+      await supabase.from("content_trends").insert(dbRecords);
+    }
+  } catch (e) {
+    console.warn("[Reddit] Could not persist to Supabase:", e);
   }
 
-  console.log(`[Reddit] Scraped ${records.length} posts from r/gaming`);
+  console.log(`[Reddit] Scraped ${records.length} posts from ${SUBREDDITS.length} subreddits`);
+  return records;
 }

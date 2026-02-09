@@ -10,13 +10,14 @@ async function main() {
   console.log(`Started at: ${new Date().toISOString()}`);
   console.log("");
 
-  const results = await runAllScrapers();
+  const { results, trends } = await runAllScrapers();
 
   console.log("\n=== Results ===");
   for (const result of results) {
     const status = result.success ? "OK" : "FAILED";
-    console.log(`  ${result.source}: ${status}${result.error ? ` - ${result.error}` : ""}`);
+    console.log(`  ${result.source}: ${status}${result.error ? ` - ${result.error}` : ""}${result.count ? ` (${result.count} items)` : ""}`);
   }
+  console.log(`\nTotal trends scraped: ${trends.length}`);
 
   const failures = results.filter((r) => !r.success);
   if (failures.length > 0) {

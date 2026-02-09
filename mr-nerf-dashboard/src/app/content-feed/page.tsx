@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, Sparkles, RefreshCw, Filter, Film, Clapperboard } from "lucide-react";
+import { Search, Sparkles, RefreshCw, Filter, Film, Clapperboard, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { TrendCard } from "@/components/content/trend-card";
 import { IdeaCard } from "@/components/content/idea-card";
 import { ScriptViewer } from "@/components/content/script-viewer";
-import type { ContentTrend, GeneratedIdea, ScriptOutline } from "@/types";
+import type { ContentTrend, GeneratedIdea, ScriptOutline, WritingInstructions } from "@/types";
 import { demoTrends } from "@/lib/demo-data";
 
 type SourceFilter = "all" | "reddit" | "twitter" | "news";
@@ -21,23 +21,60 @@ export default function ContentFeedPage() {
 
   const [generating, setGenerating] = useState(false);
   const [generatingScript, setGeneratingScript] = useState(false);
+  const [scraping, setScraping] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [formatFilter, setFormatFilter] = useState<FormatFilter>("all");
 
-  useEffect(() => {
-    async function fetchTrends() {
-      try {
-        const params = sourceFilter !== "all" ? `?source=${sourceFilter}` : "";
-        const res = await fetch(`/api/trends${params}`);
-        const json = await res.json();
-        if (json.data?.length) setTrends(json.data);
-      } catch (err) {
-        console.error("Failed to fetch trends:", err);
-      }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchTrends(); }, [sourceFilter]);
+
+  async function fetchTrends() {
+    try {
+      const params = sourceFilter !== "all" ? `?source=${sourceFilter}` : "";
+      const res = await fetch(`/api/trends${params}`);
+      const json = await res.json();
+      if (json.data?.length) setTrends(json.data);
+    } catch (err) {
+      console.error("Failed to fetch trends:", err);
     }
-    fetchTrends();
-  }, [sourceFilter]);
+  }
+
+  async function handleScrapeNow() {
+    setScraping(true);
+    try {
+      const res = await fetch("/api/scrape", { method: "POST" });
+      const json = await res.json();
+      if (json.trends?.length) {
+        setTrends(json.trends);
+      } else {
+        // Refetch from trends API after scrape
+        await fetchTrends();
+      }
+    } catch (err) {
+      console.error("Scrape failed:", err);
+    } finally {
+      setScraping(false);
+    }
+  }
+
+  function getCustomInstructions(): string {
+    try {
+      const stored = localStorage.getItem("mr-nerf-writing-instructions");
+      if (stored) {
+        const instructions: WritingInstructions = JSON.parse(stored);
+        return `
+Tone: ${instructions.tone}
+Style: ${instructions.style_notes}
+Catchphrases to use naturally: ${instructions.catchphrases.join(", ")}
+Intro style: ${instructions.intro_style}
+Outro style: ${instructions.outro_style}
+Reference: ${instructions.example_scripts}
+        `.trim();
+      }
+    } catch {}
+    return "";
+  }
 
   async function generateIdeas() {
     setGenerating(true);
@@ -45,7 +82,10 @@ export default function ContentFeedPage() {
       const res = await fetch("/api/ideas/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ format: formatFilter === "all" ? "both" : formatFilter }),
+        body: JSON.stringify({
+          format: formatFilter === "all" ? "both" : formatFilter,
+          customInstructions: getCustomInstructions(),
+        }),
       });
       const json = await res.json();
       if (json.error) {
@@ -71,6 +111,7 @@ export default function ContentFeedPage() {
           hook: idea.hook,
           outline: idea.outline,
           format: idea.format || "long-form",
+          customInstructions: getCustomInstructions(),
         }),
       });
       const json = await res.json();
@@ -120,6 +161,14 @@ export default function ContentFeedPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Content Feed</h1>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handleScrapeNow} disabled={scraping} className="gap-2">
+            {scraping ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <Zap className="h-4 w-4" />
+            )}
+            {scraping ? "Scraping..." : "Scrape Now"}
+          </Button>
           <Button onClick={generateIdeas} disabled={generating} className="gap-2">
             {generating ? (
               <RefreshCw className="h-4 w-4 animate-spin" />

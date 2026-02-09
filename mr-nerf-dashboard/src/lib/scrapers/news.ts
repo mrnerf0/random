@@ -1,10 +1,12 @@
 /**
- * Gaming news aggregator
- * Fetches articles from gaming news RSS feeds (IGN, Polygon, Kotaku).
+ * Gaming news aggregator.
+ * Fetches articles from gaming news RSS feeds.
+ * This scraper requires NO API keys - RSS feeds are free.
  */
 
 import { parseStringPromise } from "xml2js";
 import { createServerSupabase } from "../supabase";
+import type { ContentTrend } from "@/types";
 
 const RSS_FEEDS = [
   { name: "IGN", url: "https://feeds.feedburner.com/ign/all" },
@@ -28,6 +30,7 @@ async function fetchRSSFeed(
   try {
     const res = await fetch(feedUrl, {
       headers: { "User-Agent": "MrNerfDashboard/1.0" },
+      signal: AbortSignal.timeout(8000),
     });
 
     if (!res.ok) {
@@ -38,11 +41,9 @@ async function fetchRSSFeed(
     const xml = await res.text();
     const parsed = await parseStringPromise(xml, { explicitArray: false });
 
-    // Handle both RSS 2.0 and Atom feeds
     let items: NewsArticle[] = [];
 
     if (parsed.rss?.channel?.item) {
-      // RSS 2.0 format
       const rawItems = Array.isArray(parsed.rss.channel.item)
         ? parsed.rss.channel.item
         : [parsed.rss.channel.item];
@@ -62,7 +63,6 @@ async function fetchRSSFeed(
         })
       );
     } else if (parsed.feed?.entry) {
-      // Atom format
       const rawEntries = Array.isArray(parsed.feed.entry)
         ? parsed.feed.entry
         : [parsed.feed.entry];
@@ -107,8 +107,8 @@ function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, "").trim();
 }
 
-/** Run the news scrape and store results */
-export async function scrapeNews(): Promise<void> {
+/** Run the news scrape - returns trends and optionally stores in Supabase */
+export async function scrapeNews(): Promise<ContentTrend[]> {
   console.log("[News] Starting scrape...");
 
   const allArticles: NewsArticle[] = [];
@@ -120,28 +120,35 @@ export async function scrapeNews(): Promise<void> {
 
   if (allArticles.length === 0) {
     console.log("[News] No articles found.");
-    return;
+    return [];
   }
 
-  // Take top 10 articles
   const top10 = allArticles.slice(0, 10);
 
-  const supabase = createServerSupabase();
-
-  const records = top10.map((article) => ({
+  const records: ContentTrend[] = top10.map((article) => ({
+    id: `news-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    scraped_at: new Date().toISOString(),
     source: "news" as const,
     title: article.title,
     url: article.url,
     summary: `[${article.source}] ${article.summary}`,
     category: "news" as const,
-    engagement_score: 0, // RSS feeds don't provide engagement metrics
+    engagement_score: 0,
+    relevance_score: null,
   }));
 
-  const { error } = await supabase.from("content_trends").insert(records);
-
-  if (error) {
-    throw new Error(`Supabase insert error: ${error.message}`);
+  // Try to persist to Supabase
+  try {
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")) {
+      const supabase = createServerSupabase();
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const dbRecords = records.map(({ id, relevance_score, ...rest }) => rest);
+      await supabase.from("content_trends").insert(dbRecords);
+    }
+  } catch (e) {
+    console.warn("[News] Could not persist to Supabase:", e);
   }
 
   console.log(`[News] Scraped ${records.length} articles from gaming news sites`);
+  return records;
 }
