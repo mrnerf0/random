@@ -7,13 +7,17 @@ import {
   Newspaper,
   KanbanSquare,
   Gamepad2,
+  PenTool,
+  Crosshair,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { href: "/content-feed", label: "Content Feed", icon: Newspaper },
+  { href: "/scripts", label: "Script Writer", icon: PenTool },
   { href: "/kanban", label: "Kanban Board", icon: KanbanSquare },
+  { href: "/headshot", label: "Headshot", icon: Crosshair },
 ];
 
 interface SidebarProps {

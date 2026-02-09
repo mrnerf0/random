@@ -1,4 +1,4 @@
-import type { Analytics, ContentTrend, KanbanItem, TeamMember } from "@/types";
+import type { Analytics, ContentTrend, KanbanItem, TeamMember, LiveStats, HeadshotAd, WritingInstructions } from "@/types";
 
 // Generate date strings for the last N days
 function daysAgo(n: number): string {
@@ -272,3 +272,61 @@ export const demoKanbanItems: KanbanItem[] = [
     updated_at: daysAgo(30),
   },
 ];
+
+export const demoLiveStats: LiveStats = {
+  youtube: {
+    subscribers: 48500,
+    totalViews: 12500000,
+    videoCount: 342,
+    recentVideos: [
+      { title: "NERF Pro 2.0 - Is It Worth The Hype?", views: 89000, likes: 4200, publishedAt: daysAgo(2) },
+      { title: "I Tested Every $10 Blaster So You Don't Have To", views: 156000, likes: 8900, publishedAt: daysAgo(5) },
+      { title: "This 3D Printed Mod Changes EVERYTHING", views: 234000, likes: 12000, publishedAt: daysAgo(9) },
+      { title: "Nerf War: 50 vs 50 Battle Royale", views: 567000, likes: 28000, publishedAt: daysAgo(14) },
+      { title: "Unboxing $500 of Mystery Nerf Blasters", views: 412000, likes: 19500, publishedAt: daysAgo(19) },
+    ],
+  },
+  instagram: {
+    followers: 17200,
+    engagementRate: 4.8,
+  },
+};
+
+export const demoHeadshotAds: HeadshotAd[] = [
+  {
+    id: "ha1",
+    page_name: "Headshot",
+    ad_text: "Level up your game with Headshot. The gaming energy drink that keeps you focused for hours. No crash, no jitters.",
+    media_url: null,
+    started_running: daysAgo(15),
+    platform: "Facebook",
+    impressions_range: "50K-100K",
+  },
+  {
+    id: "ha2",
+    page_name: "Headshot Gaming",
+    ad_text: "Pro gamers trust Headshot for tournament day. Clean energy, zero sugar, maximum focus.",
+    media_url: null,
+    started_running: daysAgo(7),
+    platform: "Instagram",
+    impressions_range: "100K-200K",
+  },
+  {
+    id: "ha3",
+    page_name: "Headshot",
+    ad_text: "Stop losing to brain fog. Headshot gives you the edge with nootropics + natural caffeine.",
+    media_url: null,
+    started_running: daysAgo(3),
+    platform: "Facebook",
+    impressions_range: "25K-50K",
+  },
+];
+
+export const demoWritingInstructions: WritingInstructions = {
+  tone: "Energetic, enthusiastic, knowledgeable but approachable. Like talking to your best friend who happens to be a Nerf expert.",
+  style_notes: "Use short punchy sentences. Address the viewer directly. Include moments of genuine excitement. Don't be afraid to be goofy or use sound effects.",
+  catchphrases: ["Let's GO!", "That's INSANE", "No way...", "This changes everything", "You guys are NOT ready for this"],
+  intro_style: "Always start with a bold statement or question that hooks the viewer in the first 3 seconds. Example: 'This blaster just DESTROYED every other Nerf gun I own.'",
+  outro_style: "End with a genuine call to action and a tease for the next video. Example: 'Smash that subscribe button because next week... I'm modding this thing to shoot 300 FPS.'",
+  example_scripts: "Hook: 'Hasbro just released their most INSANE blaster ever... and I got my hands on it early.'\nThen show the unboxing with genuine reactions. Test it with measurable results (chronograph readings, accuracy tests). Compare to popular alternatives. Give honest verdict.",
+};

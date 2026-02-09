@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -11,12 +11,12 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { Filter } from "lucide-react";
+import { RefreshCw, Filter } from "lucide-react";
 import { Select } from "@/components/ui/select";
 import { KanbanColumnComponent } from "@/components/kanban/kanban-column";
 import { KanbanCard } from "@/components/kanban/kanban-card";
 import { EditCardDialog } from "@/components/kanban/edit-card-dialog";
-import type { KanbanItem, KanbanColumn } from "@/types";
+import type { KanbanItem, KanbanColumn, TeamMember } from "@/types";
 import { demoKanbanItems, demoTeamMembers } from "@/lib/demo-data";
 
 const COLUMNS: KanbanColumn[] = [
@@ -30,7 +30,8 @@ const COLUMNS: KanbanColumn[] = [
 
 export default function KanbanPage() {
   const [items, setItems] = useState<KanbanItem[]>(demoKanbanItems);
-  const [teamMembers] = useState(demoTeamMembers);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(demoTeamMembers);
+  const [loading, setLoading] = useState(true);
   const [activeItem, setActiveItem] = useState<KanbanItem | null>(null);
   const [editItem, setEditItem] = useState<KanbanItem | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -42,22 +43,44 @@ export default function KanbanPage() {
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [itemsRes, teamRes] = await Promise.all([
+        fetch("/api/kanban"),
+        fetch("/api/team"),
+      ]);
+      const [itemsJson, teamJson] = await Promise.all([
+        itemsRes.json(),
+        teamRes.json(),
+      ]);
+      if (itemsJson.data?.length) setItems(itemsJson.data);
+      if (teamJson.data?.length) setTeamMembers(teamJson.data);
+    } catch (err) {
+      console.error("Failed to fetch kanban data:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
   function handleDragStart(event: DragStartEvent) {
     const item = items.find((i) => i.id === event.active.id);
     setActiveItem(item || null);
   }
 
-  function handleDragEnd(event: DragEndEvent) {
+  async function handleDragEnd(event: DragEndEvent) {
     setActiveItem(null);
     const { active, over } = event;
-
     if (!over) return;
 
     const activeId = active.id as string;
     const overId = over.id as string;
 
     let targetColumn: KanbanColumn;
-
     if (COLUMNS.includes(overId as KanbanColumn)) {
       targetColumn = overId as KanbanColumn;
     } else {
@@ -70,10 +93,19 @@ export default function KanbanPage() {
     if (!activeItemData || activeItemData.column === targetColumn) return;
 
     setItems((prev) =>
-      prev.map((i) =>
-        i.id === activeId ? { ...i, column: targetColumn } : i
-      )
+      prev.map((i) => (i.id === activeId ? { ...i, column: targetColumn } : i))
     );
+
+    try {
+      await fetch(`/api/kanban/${activeId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ column: targetColumn }),
+      });
+    } catch (err) {
+      console.error("Failed to update item:", err);
+      fetchData();
+    }
   }
 
   function handleAddItem(column: KanbanColumn) {
@@ -87,30 +119,35 @@ export default function KanbanPage() {
     setDialogOpen(true);
   }
 
-  function handleSave(data: Partial<KanbanItem> & { id?: string }) {
-    if (data.id) {
-      setItems((prev) =>
-        prev.map((i) => (i.id === data.id ? { ...i, ...data } : i))
-      );
-    } else {
-      const newItem: KanbanItem = {
-        id: `k-${Date.now()}`,
-        title: data.title || "Untitled",
-        description: data.description || "",
-        column: (data.column as KanbanColumn) || "ideas",
-        assigned_to: data.assigned_to || null,
-        due_date: data.due_date || null,
-        format: data.format || "commentary",
-        notes: data.notes || "",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      setItems((prev) => [...prev, newItem]);
+  async function handleSave(data: Partial<KanbanItem> & { id?: string }) {
+    try {
+      if (data.id) {
+        const { id, ...updates } = data;
+        await fetch(`/api/kanban/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updates),
+        });
+      } else {
+        await fetch("/api/kanban", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+      }
+      fetchData();
+    } catch (err) {
+      console.error("Failed to save item:", err);
     }
   }
 
-  function handleDelete(id: string) {
-    setItems((prev) => prev.filter((i) => i.id !== id));
+  async function handleDelete(id: string) {
+    try {
+      await fetch(`/api/kanban/${id}`, { method: "DELETE" });
+      setItems((prev) => prev.filter((i) => i.id !== id));
+    } catch (err) {
+      console.error("Failed to delete item:", err);
+    }
   }
 
   const filteredItems = items.filter((item) => {
@@ -118,6 +155,14 @@ export default function KanbanPage() {
     if (filterFormat && item.format !== filterFormat) return false;
     return true;
   });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   const memberFilterOptions = [
     { value: "", label: "All Members" },
@@ -174,11 +219,7 @@ export default function KanbanPage() {
 
         <DragOverlay>
           {activeItem && (
-            <KanbanCard
-              item={activeItem}
-              onClick={() => {}}
-              teamMembers={teamMembers}
-            />
+            <KanbanCard item={activeItem} onClick={() => {}} teamMembers={teamMembers} />
           )}
         </DragOverlay>
       </DndContext>
@@ -186,10 +227,7 @@ export default function KanbanPage() {
       <EditCardDialog
         item={editItem}
         open={dialogOpen}
-        onClose={() => {
-          setDialogOpen(false);
-          setEditItem(null);
-        }}
+        onClose={() => { setDialogOpen(false); setEditItem(null); }}
         onSave={handleSave}
         onDelete={handleDelete}
         teamMembers={teamMembers}
